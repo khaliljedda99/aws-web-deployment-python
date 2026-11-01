@@ -66,6 +66,10 @@ The command prints the EC2 instance ID and ALB endpoint. Allow a few minutes for
 - load_balancer.py — ALB, target group, and listener
 - main.py — deployment entry point
 
+## Original single-file attempt
+
+The initial monolithic script is preserved in [examples/first_try.py](examples/first_try.py) for reference. It defaults to eu-central-1 and uses direct create calls; use the modular entry point above for the current deployment.
+
 ## Security and costs
 
 SSH (22) is restricted to MY_IP_CIDR. HTTP (80) is open to the internet on the EC2 and ALB security groups, as requested. This example serves plain HTTP and uses one EC2 target. AWS charges for resources such as EC2 and the ALB while they are running.
