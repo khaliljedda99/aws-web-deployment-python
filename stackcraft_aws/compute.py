@@ -1,11 +1,11 @@
 from pathlib import Path
 
 
-TEMPLATE_URL = "https://www.tooplate.com/download/2162_stackcraft"
+TEMPLATE_URL = "https://www.tooplate.com/download/2017_hosting"
 
 
 def create_key_pair(ec2, name, key_path):
-    key_name = f"{name}-key"
+    key_name = f"{name}-KeyPair"
     existing = ec2.describe_key_pairs(Filters=[{"Name": "key-name", "Values": [key_name]}])["KeyPairs"]
     if existing:
         if not Path(key_path).is_file():
@@ -47,7 +47,7 @@ def latest_amazon_linux_2023(region_name):
 def launch_instance(ec2, name, subnet_id, security_group_id, key_name, region_name):
     client = ec2.meta.client
     existing = client.describe_instances(Filters=[
-        {"Name": "tag:Name", "Values": [f"{name}-ec2"]},
+        {"Name": "tag:Name", "Values": [f"{name}-EC2-Instance"]},
         {"Name": "instance-state-name", "Values": ["pending", "running", "stopping", "stopped"]},
     ])
     for reservation in existing["Reservations"]:
@@ -58,5 +58,5 @@ def launch_instance(ec2, name, subnet_id, security_group_id, key_name, region_na
     response = client.run_instances(ImageId=image_id, InstanceType="t2.micro", MinCount=1, MaxCount=1,
         KeyName=key_name, SecurityGroupIds=[security_group_id], SubnetId=subnet_id,
         UserData=user_data(), TagSpecifications=[{"ResourceType": "instance", "Tags": [
-            {"Key": "Name", "Value": f"{name}-ec2"}, {"Key": "Project", "Value": name}]}])
+            {"Key": "Name", "Value": f"{name}-EC2-Instance"}, {"Key": "Project", "Value": name}]}])
     return response["Instances"][0]["InstanceId"]

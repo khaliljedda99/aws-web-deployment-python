@@ -1,62 +1,78 @@
-# StackCraft on AWS
+# Tooplate Hosting on AWS
 
-A small, modular Python project that provisions a Tooplate StackCraft portfolio site on AWS with boto3.
+A modular Python/boto3 project that deploys Tooplate's [Hosting template](https://www.tooplate.com/view/2017-hosting) on Amazon Linux 2023 behind an internet-facing Application Load Balancer.
 
-It creates an EC2 key pair, network security groups, one Amazon Linux 2023 **t2.micro** instance, an internet-facing Application Load Balancer, an HTTP listener, and a target group. EC2 user data downloads the [StackCraft template](https://www.tooplate.com/view/2162-stackcraft) and serves it with Apache.
+## 1. AWS architecture
 
-## Architecture
+    Internet / users
+           |
+           | HTTP :80
+           v
+    Application Load Balancer (public; all available default-VPC AZ subnets)
+           |
+           | HTTP :80
+           v
+    Target group (health check: /)
+           |
+           | HTTP :80
+           v
+    EC2 t2.micro (Amazon Linux 2023, Apache, Tooplate Hosting)
 
-    Internet --HTTP:80--> Application Load Balancer --HTTP:80--> EC2 (Apache)
-                               |                                    |
-                        stackcraft-alb-sg                    stackcraft-instance-sg
-                        TCP 80 from anywhere                  TCP 80 from anywhere
-                                                              TCP 22 from MY_IP_CIDR
+The ALB uses one default public subnet from each available Availability Zone. The single EC2 instance launches in one of those subnets. SSH access to the instance uses the Hosting key pair and is limited to MY_IP_CIDR.
 
-The ALB uses public subnets in two Availability Zones from the default VPC. The single EC2 target launches in one of those subnets.
+## 2. Resources created
+
+| Resource | Name | Configuration |
+| --- | --- | --- |
+| EC2 key pair | Hosting-KeyPair | Private key saved locally as Hosting-KeyPair.pem |
+| EC2 security group | Hosting-EC2-SG | SSH (22) from MY_IP_CIDR; HTTP (80) from anywhere |
+| EC2 instance | Hosting-EC2-Instance | Amazon Linux 2023, t2.micro; Apache serves the Hosting template |
+| ALB security group | Hosting-ALB-SG | HTTP (80) from anywhere |
+| Application Load Balancer | Hosting-ALB | Internet-facing; uses available default-VPC public subnet AZs |
+| Target group | Hosting-Target-Group | HTTP (80), health check path /; registers the EC2 instance |
+| Listener | HTTP :80 | Forwards requests to Hosting-Target-Group |
+
+Resources are named after the Tooplate Hosting template. This is a single-instance deployment; it does not create autoscaling or blue/green target groups.
 
 ## Requirements
 
 - Python 3.10 or newer
-- AWS credentials available to boto3 (for example, an AWS CLI profile)
-- AWS IAM permissions to manage EC2 instances, key pairs, security groups, load balancers, target groups, and listeners, and to read the public Amazon Linux AMI parameter from Systems Manager Parameter Store
-- A default VPC with public subnets in at least two Availability Zones in the selected region
+- Boto3 (install with pip)
+- AWS credentials available through boto3's standard credential chain
+- IAM permissions for EC2, VPC, ELBv2, and Systems Manager Parameter Store
+- A default VPC with public subnets in at least two Availability Zones
 
-## Configure and launch (Git Bash)
+## Configure and deploy (Git Bash)
 
     python -m venv .venv
     source .venv/Scripts/activate
     pip install -r requirements.txt
     cp .env.example .env
 
-Edit .env and set MY_IP_CIDR to your public IPv4 address with a /32 suffix. Keep AWS_REGION=us-east-1 for Virginia, or set it to the region that contains your default VPC. Then load the values and launch:
+Set MY_IP_CIDR in .env to your public IPv4 address followed by /32. For Virginia, use AWS_REGION=us-east-1. Then load the values and run:
 
     set -a
     source .env
     set +a
     python -m stackcraft_aws.main
 
-The command prints the EC2 instance ID and the ALB URL. Allow a few minutes for cloud-init to download the template and complete setup before opening the URL.
+The command prints the EC2 instance ID and ALB endpoint. Allow a few minutes for EC2 user data to download the site files and finish configuring Apache.
 
-## Modules
+## Project modules
 
-- config.py: environment configuration and input checks
-- network.py: default VPC, public subnets, and security groups
-- compute.py: key pair, Amazon Linux instance, and website user data
-- load_balancer.py: target group, ALB, and HTTP listener
-- main.py: provisioning entry point
-
-Resource names use the stackcraft prefix. The setup can resume if a prior attempt created the security groups, key pair, instance, target group, or ALB before failing.
+- config.py — environment settings and validation
+- network.py — default VPC, public subnet selection, and security groups
+- compute.py — key pair, EC2 instance, AMI lookup, and website user data
+- load_balancer.py — ALB, target group, and listener
+- main.py — deployment entry point
 
 ## Security and costs
 
-SSH is limited to MY_IP_CIDR. HTTP is open to the internet on both security groups, as requested. The instance has one target and the ALB serves plain HTTP; add HTTPS and a certificate before using this as a production site. AWS charges for running resources such as EC2 and the load balancer.
+SSH (22) is restricted to MY_IP_CIDR. HTTP (80) is open to the internet on the EC2 and ALB security groups, as requested. This example serves plain HTTP and uses one EC2 target. AWS charges for resources such as EC2 and the ALB while they are running.
 
-The private key is saved to KEY_PAIR_FILE (default: stackcraft-key.pem). Keep it private. .env and *.pem files are ignored by Git.
+The private key is written to Hosting-KeyPair.pem. Keep it private. The .env file, PEM keys, Python virtual environment, and bytecode cache are excluded by .gitignore.
 
 ## Cleanup
 
-In the AWS Console, switch to the same region and remove the StackCraft ALB listener and ALB, then the target group. Terminate the stackcraft-ec2 instance, delete stackcraft-instance-sg and stackcraft-alb-sg, and delete the stackcraft-key key pair. Confirm each resource belongs to this project before deleting it.
+In the AWS Console, switch to the deployment region and delete the HTTP listener, ALB, and target group; terminate Hosting-EC2-Instance; then delete Hosting-EC2-SG, Hosting-ALB-SG, and Hosting-KeyPair. Confirm each resource belongs to this project before removing it.
 
-## Template
-
-The website design and source archive come from [Tooplate's StackCraft template](https://www.tooplate.com/view/2162-stackcraft). Follow Tooplate's current template usage terms for redistribution and attribution.

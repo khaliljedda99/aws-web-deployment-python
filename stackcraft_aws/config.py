@@ -15,5 +15,5 @@ class Config:
         my_ip_cidr = os.getenv("MY_IP_CIDR", "")
         if not my_ip_cidr.endswith("/32"):
             raise ValueError("Set MY_IP_CIDR to your public IPv4 address with /32, e.g. 198.51.100.7/32")
-        return cls(region, my_ip_cidr, os.getenv("STACK_NAME", "stackcraft").lower(),
-                   os.getenv("KEY_PAIR_FILE", "stackcraft-key.pem"))
+        return cls(region, my_ip_cidr, os.getenv("STACK_NAME", "Hosting"),
+                   os.getenv("KEY_PAIR_FILE", "Hosting-KeyPair.pem"))

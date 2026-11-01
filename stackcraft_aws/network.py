@@ -12,7 +12,7 @@ def get_public_subnets(ec2, vpc_id):
     by_az = {}
     for subnet in sorted(default_subnets, key=lambda s: s["AvailabilityZone"]):
         by_az.setdefault(subnet["AvailabilityZone"], subnet["SubnetId"])
-    selected = list(by_az.values())[:2]
+    selected = list(by_az.values())
     if len(selected) < 2:
         raise RuntimeError("ALB requires public subnets in at least two Availability Zones.")
     return selected
@@ -28,8 +28,8 @@ def create_security_groups(ec2, vpc_id, name, my_ip_cidr):
             return groups[0]["GroupId"]
         return ec2.create_security_group(GroupName=group_name, Description=description, VpcId=vpc_id)["GroupId"]
 
-    instance_sg = get_or_create(f"{name}-instance-sg", f"{name} EC2 ingress")
-    alb_sg = get_or_create(f"{name}-alb-sg", f"{name} ALB HTTP ingress")
+    instance_sg = get_or_create(f"{name}-EC2-SG", f"{name} EC2 ingress")
+    alb_sg = get_or_create(f"{name}-ALB-SG", f"{name} ALB HTTP ingress")
     ec2.create_tags(Resources=[instance_sg, alb_sg], Tags=[{"Key": "Name", "Value": name}])
     ingress_rules = [
         (instance_sg, {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": my_ip_cidr, "Description": "SSH from operator"}]}),
