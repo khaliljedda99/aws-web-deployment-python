@@ -1,5 +1,5 @@
 def create_alb(elbv2, name, vpc_id, subnets, alb_security_group_id, instance_id):
-    target_name = f"{name}-tg"
+    target_name = f"{name}-Target-Group"
     groups = [group for group in elbv2.describe_target_groups()["TargetGroups"] if group["TargetGroupName"] == target_name]
     if groups:
         target = groups[0]["TargetGroupArn"]
@@ -9,7 +9,7 @@ def create_alb(elbv2, name, vpc_id, subnets, alb_security_group_id, instance_id)
             Matcher={"HttpCode": "200-399"})["TargetGroups"][0]["TargetGroupArn"]
     elbv2.register_targets(TargetGroupArn=target, Targets=[{"Id": instance_id, "Port": 80}])
 
-    alb_name = f"{name}-alb"
+    alb_name = f"{name}-ALB"
     existing = [item for item in elbv2.describe_load_balancers()["LoadBalancers"] if item["LoadBalancerName"] == alb_name]
     if existing:
         load_balancer = existing[0]
