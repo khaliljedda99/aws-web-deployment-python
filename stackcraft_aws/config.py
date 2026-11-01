@@ -25,6 +25,7 @@ def discover_my_ip_cidr():
 def get_my_ip_cidr():
     "Return a validated single-address IPv4 CIDR for the SSH rule."
     # An explicit value wins; otherwise discover the current public IP.
+    cidr = os.getenv("MY_IP_CIDR", "").strip() or discover_my_ip_cidr()
     try:
         network = ipaddress.IPv4Network(cidr, strict=False)
     except ValueError as exc:
@@ -46,7 +47,7 @@ class Config:
 
     @classmethod
     def from_env(cls):
-    "Build configuration from environment variables and validate the SSH CIDR."
+        """Build configuration from environment variables and validate the SSH CIDR."""
         region = os.getenv("AWS_REGION", "us-east-1")
         my_ip_cidr = get_my_ip_cidr()
         return cls(
