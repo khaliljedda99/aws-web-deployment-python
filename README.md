@@ -68,7 +68,7 @@ The command prints the EC2 instance ID and ALB endpoint. Allow a few minutes for
 
 ## Original first attempt
 
-The project's original single-file Boto3 implementation is preserved in [examples/first_try.py](examples/first_try.py). It shows the initial deployment approach before the code was split into modules. This historical example defaults to eu-central-1 and uses direct create calls; use the modular entry point above for the current deployment.
+The project's original single-file Boto3 implementation is preserved in [initial-version/first_try.py](initial-version/first_try.py). It shows the initial deployment approach before the code was split into modules. This historical example defaults to eu-central-1 and uses direct create calls; use the modular entry point above for the current deployment.
 
 ## Security and costs
 
