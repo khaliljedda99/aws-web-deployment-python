@@ -29,7 +29,7 @@ def get_public_subnets(ec2, vpc_id):
 def create_security_groups(ec2, vpc_id, name, my_ip_cidr):
     "Create or reuse the EC2 and ALB security groups and add the required ingress rules."
     def get_or_create(group_name, description):
-    "Find a matching security group in this VPC or create it."
+        """Find a matching security group in this VPC or create it."""
         groups = ec2.describe_security_groups(Filters=[
             {"Name": "group-name", "Values": [group_name]},
             {"Name": "vpc-id", "Values": [vpc_id]},
