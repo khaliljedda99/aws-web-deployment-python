@@ -49,7 +49,7 @@ Resources are named after the Tooplate Hosting template. This is a single-instan
     pip install -r requirements.txt
     cp .env.example .env
 
-Set MY_IP_CIDR in .env to your public IPv4 address followed by /32. For Virginia, use AWS_REGION=us-east-1. Then load the values and run:
+For Virginia, use AWS_REGION=us-east-1. Leave MY_IP_CIDR blank to have the script detect your public IPv4 address at startup and restrict SSH to that address (/32). Set MY_IP_CIDR manually only if automatic detection is unavailable or you need to override it. Then load the values and run:
 
     set -a
     source .env
@@ -72,7 +72,7 @@ The initial monolithic script is preserved in [examples/first_try.py](examples/f
 
 ## Security and costs
 
-SSH (22) is restricted to MY_IP_CIDR. HTTP (80) is open to the internet on the EC2 and ALB security groups, as requested. This example serves plain HTTP and uses one EC2 target. AWS charges for resources such as EC2 and the ALB while they are running.
+SSH (22) is restricted to MY_IP_CIDR. When the variable is blank, the script discovers the current public IPv4 address using checkip.amazonaws.com and adds /32. HTTP (80) is open to the internet on the EC2 and ALB security groups, as requested. This example serves plain HTTP and uses one EC2 target. AWS charges for resources such as EC2 and the ALB while they are running.
 
 The private key is written to Hosting-KeyPair.pem. Keep it private. The .env file, PEM keys, Python virtual environment, and bytecode cache are excluded by .gitignore.
 
