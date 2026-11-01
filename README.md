@@ -66,9 +66,9 @@ The command prints the EC2 instance ID and ALB endpoint. Allow a few minutes for
 - load_balancer.py — ALB, target group, and listener
 - main.py — deployment entry point
 
-## Original single-file attempt
+## Original first attempt
 
-The initial monolithic script is preserved in [examples/first_try.py](examples/first_try.py) for reference. It defaults to eu-central-1 and uses direct create calls; use the modular entry point above for the current deployment.
+The project's original single-file Boto3 implementation is preserved in [examples/first_try.py](examples/first_try.py). It shows the initial deployment approach before the code was split into modules. This historical example defaults to eu-central-1 and uses direct create calls; use the modular entry point above for the current deployment.
 
 ## Security and costs
 
