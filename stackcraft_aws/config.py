@@ -1,3 +1,9 @@
+"""Read and validate environment-based deployment settings.
+
+When MY_IP_CIDR is blank, this module discovers the operator's current
+public IPv4 address so SSH can be limited to that single address.
+"""
+
 from dataclasses import dataclass
 import ipaddress
 import os
@@ -17,11 +23,13 @@ def discover_my_ip_cidr():
 
 
 def get_my_ip_cidr():
-    cidr = os.getenv("MY_IP_CIDR", "").strip() or discover_my_ip_cidr()
+    "Return a validated single-address IPv4 CIDR for the SSH rule."
+    # An explicit value wins; otherwise discover the current public IP.
     try:
         network = ipaddress.IPv4Network(cidr, strict=False)
     except ValueError as exc:
         raise ValueError("MY_IP_CIDR must be a valid IPv4 CIDR, for example 198.51.100.7/32") from exc
+    # SSH access is intentionally limited to one IPv4 address.
     if network.prefixlen != 32:
         raise ValueError("MY_IP_CIDR must use /32 so SSH is restricted to one address")
     return str(network)
@@ -29,6 +37,8 @@ def get_my_ip_cidr():
 
 @dataclass(frozen=True)
 class Config:
+    """Immutable settings shared by the deployment modules."""
+
     region: str
     my_ip_cidr: str
     stack_name: str
@@ -36,6 +46,7 @@ class Config:
 
     @classmethod
     def from_env(cls):
+    "Build configuration from environment variables and validate the SSH CIDR."
         region = os.getenv("AWS_REGION", "us-east-1")
         my_ip_cidr = get_my_ip_cidr()
         return cls(

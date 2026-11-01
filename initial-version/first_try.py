@@ -1,3 +1,10 @@
+"""Historical, single-file version of the Tooplate Hosting deployment.
+
+This is kept to document the project's first implementation. It defaults to
+Frankfurt (eu-central-1) and uses direct create calls; the current deployment
+is modular and runs with: python -m stackcraft_aws.main
+"""
+
 
 import boto3
 import urllib.request
@@ -9,7 +16,7 @@ from botocore.exceptions import ClientError
 # CONFIGURATION
 # =====================================================
 
-REGION = "eu-central-1"  # Frankfurt
+REGION = "eu-central-1"  # Historical default: Frankfurt; the modular app defaults to Virginia.
 TEMPLATE_NAME = "Hosting"
 
 KEY_NAME = f"{TEMPLATE_NAME}-KeyPair"
@@ -37,7 +44,7 @@ def get_my_ip():
         return response.read().decode().strip()
 
 
-MY_IP = get_my_ip()
+MY_IP = get_my_ip()  # Captured once and used for the SSH /32 ingress rule.
 
 print(f"My public IP: {MY_IP}")
 
@@ -47,6 +54,7 @@ print(f"My public IP: {MY_IP}")
 # =====================================================
 
 def get_default_vpc_and_subnets():
+    "Find the default VPC and choose one subnet per AZ for the load balancer."
 
     response = ec2.describe_vpcs(
         Filters=[{"Name": "isDefault", "Values": ["true"]}]
@@ -98,6 +106,7 @@ VPC_ID, SUBNETS = get_default_vpc_and_subnets()
 # =====================================================
 
 def create_key_pair():
+    "Create the EC2 key pair and save its private PEM material locally."
 
     response = ec2.create_key_pair(
         KeyName=KEY_NAME,
@@ -128,6 +137,7 @@ def create_key_pair():
 # =====================================================
 
 def create_ec2_security_group():
+    "Create the instance security group with SSH and HTTP ingress."
 
     response = ec2.create_security_group(
         GroupName=EC2_SG_NAME,
@@ -184,6 +194,7 @@ def create_ec2_security_group():
 # =====================================================
 
 def create_alb_security_group():
+    "Create the ALB security group with public HTTP ingress."
 
     response = ec2.create_security_group(
         GroupName=ALB_SG_NAME,
@@ -229,6 +240,7 @@ def create_alb_security_group():
 # =====================================================
 
 def get_amazon_linux_ami():
+    "Read the current Amazon Linux 2023 AMI ID from Systems Manager."
 
     response = ssm.get_parameter(
         Name=(
@@ -248,6 +260,7 @@ def get_amazon_linux_ami():
 # 7. EC2 USER DATA - INSTALL TOOPLATE WEBSITE
 # =====================================================
 
+# EC2 executes this once on first boot to install Apache and copy the template.
 USER_DATA = """#!/bin/bash
 set -eux
 
@@ -290,6 +303,7 @@ systemctl start httpd
 # =====================================================
 
 def create_ec2_instance(ec2_sg_id):
+    "Launch a t2.micro and wait for its EC2 status checks."
 
     ami_id = get_amazon_linux_ami()
 
@@ -354,6 +368,7 @@ def create_ec2_instance(ec2_sg_id):
 # =====================================================
 
 def create_alb(alb_sg_id):
+    "Create the internet-facing ALB across the selected public subnets."
 
     subnet_ids = [
         subnet["SubnetId"] for subnet in SUBNETS
@@ -392,6 +407,7 @@ def create_alb(alb_sg_id):
 # =====================================================
 
 def create_target_group():
+    "Create the HTTP target group with a root-path health check."
 
     response = elbv2.create_target_group(
         Name=TARGET_GROUP_NAME,
@@ -428,6 +444,7 @@ def create_target_group():
 # =====================================================
 
 def register_instance(tg_arn, instance_id):
+    "Register the EC2 instance as a target on HTTP port 80."
 
     elbv2.register_targets(
         TargetGroupArn=tg_arn,
@@ -447,6 +464,7 @@ def register_instance(tg_arn, instance_id):
 # =====================================================
 
 def create_listener(alb_arn, tg_arn):
+    "Create an HTTP listener that forwards to the target group."
 
     elbv2.create_listener(
         LoadBalancerArn=alb_arn,
@@ -469,6 +487,7 @@ def create_listener(alb_arn, tg_arn):
 # =====================================================
 
 def main():
+    "Run the original single-file deployment sequence and print its outputs."
 
     try:
 

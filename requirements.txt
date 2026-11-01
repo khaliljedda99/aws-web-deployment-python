@@ -1,1 +1,2 @@
+# Boto3 provides the Python clients used to call AWS services.
 boto3>=1.34.0

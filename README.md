@@ -58,13 +58,22 @@ For Virginia, use AWS_REGION=us-east-1. Leave MY_IP_CIDR blank to have the scrip
 
 The command prints the EC2 instance ID and ALB endpoint. Allow a few minutes for EC2 user data to download the site files and finish configuring Apache.
 
-## Project modules
+## Project files and modules
 
-- config.py — environment settings and validation
-- network.py — default VPC, public subnet selection, and security groups
-- compute.py — key pair, EC2 instance, AMI lookup, and website user data
-- load_balancer.py — ALB, target group, and listener
-- main.py — deployment entry point
+| File | Purpose |
+| --- | --- |
+| .env.example | Documents the region, SSH CIDR override, resource prefix, and local key path settings. |
+| .gitignore | Excludes local secrets, PEM keys, bytecode, and the virtual environment. |
+| requirements.txt | Declares Boto3, the AWS SDK dependency. |
+| stackcraft_aws/__init__.py | Identifies the Python package and documents its run command. |
+| stackcraft_aws/config.py | Reads environment values, discovers the public IP when needed, and validates the SSH CIDR. |
+| stackcraft_aws/network.py | Finds the default VPC/public subnets and creates both security groups. |
+| stackcraft_aws/compute.py | Creates the key pair and EC2 instance, selects the AMI, and supplies the website startup script. |
+| stackcraft_aws/load_balancer.py | Creates the target group, registers EC2, and configures the ALB/listener. |
+| stackcraft_aws/main.py | Coordinates the modules and prints the deployment outputs. |
+| initial-version/first_try.py | Preserves the original single-file prototype for reference. |
+
+The runtime dependency order is: configuration → VPC/subnets → security groups and key pair → EC2 instance → target group and ALB → HTTP listener. The ALB forwards HTTP requests to the registered EC2 instance.
 
 ## Original first attempt
 
