@@ -86,7 +86,7 @@ SSH (22) is restricted to MY_IP_CIDR. When the variable is blank, the program di
 
 The private key is written to Hosting-KeyPair.pem with restrictive read-only permissions. Keep it private. The .env file, PEM keys, Python virtual environment, and bytecode cache are excluded by .gitignore.
 
-### Recovering a lost key pair file
+## Recovering a lost key pair file
 
 AWS does not let you download the original private key again. If Hosting-KeyPair.pem is missing, first restore it from a secure backup. The script will stop rather than silently create a different key while the Hosting-KeyPair still exists in AWS.
 
