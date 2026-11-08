@@ -1,17 +1,13 @@
-"""Create the EC2 key pair and web server.
+"""Create the EC2 key pair and launch template for the web servers."""
 
-The instance uses the latest Amazon Linux 2023 image exposed by AWS Systems
-Manager and configures Apache through EC2 user data at first boot.
-"""
-
+import base64
 from pathlib import Path
-
 
 TEMPLATE_URL = "https://www.tooplate.com/download/2017_hosting"
 
 
 def create_key_pair(ec2, name, key_path):
-    "Create or reuse the named EC2 key pair and save its private PEM file locally."
+    """Create or reuse the named EC2 key pair and save its private PEM file."""
     key_name = f"{name}-KeyPair"
     existing = ec2.describe_key_pairs(Filters=[{"Name": "key-name", "Values": [key_name]}])["KeyPairs"]
     if existing:
@@ -30,46 +26,57 @@ def create_key_pair(ec2, name, key_path):
 
 
 def user_data(template_url=TEMPLATE_URL):
-    "Return the shell script EC2 runs to install Apache and publish the Tooplate site."
+    """Return the EC2 startup script that installs Apache and the Tooplate site."""
     return f'''#!/bin/bash
 set -euxo pipefail
 dnf install -y httpd curl unzip
 systemctl enable --now httpd
-# Keep downloaded and extracted template files out of Apache's document root.
 workdir=$(mktemp -d)
 curl -fL --retry 5 --retry-delay 3 "{template_url}" -o "$workdir/template.zip"
 unzip -q "$workdir/template.zip" -d "$workdir/site"
-# Find the archive's directory containing the website entry point.
 site_root=$(find "$workdir/site" -type f -name index.html -printf '%h\\n' | head -n 1)
 test -n "$site_root"
 cp -a "$site_root"/. /var/www/html/
-chown -R apache:apache /var/www/html
+chown -R apache:apache /var/www/html/
 '''
 
 
 def latest_amazon_linux_2023(region_name):
-    "Look up the current Amazon Linux 2023 x86_64 AMI ID for this region."
-    # Resolve the official Amazon Linux 2023 x86_64 image ID through SSM Parameter Store.
+    """Return the current Amazon Linux 2023 x86_64 AMI ID for a region."""
     import boto3
     ssm = boto3.client("ssm", region_name=region_name)
-    return ssm.get_parameter(Name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64")['Parameter']['Value']
+    return ssm.get_parameter(Name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64")["Parameter"]["Value"]
 
 
-def launch_instance(ec2, name, subnet_id, security_group_id, key_name, region_name):
-    "Reuse a named active instance or launch a new t2.micro web server."
-    client = ec2.meta.client
-    existing = client.describe_instances(Filters=[
-        {"Name": "tag:Name", "Values": [f"{name}-EC2-Instance"]},
-        {"Name": "instance-state-name", "Values": ["pending", "running", "stopping", "stopped"]},
-    ])
-    # Reuse prevents an ordinary rerun from launching another matching instance.
-    for reservation in existing["Reservations"]:
-        if reservation["Instances"]:
-            return reservation["Instances"][0]["InstanceId"]
-
+def create_launch_template(ec2, name, security_group_id, key_name, region_name):
+    """Create a launch template or add a new version for the Auto Scaling Group."""
     image_id = latest_amazon_linux_2023(region_name)
-    response = client.run_instances(ImageId=image_id, InstanceType="t2.micro", MinCount=1, MaxCount=1,
-        KeyName=key_name, SecurityGroupIds=[security_group_id], SubnetId=subnet_id,
-        UserData=user_data(), TagSpecifications=[{"ResourceType": "instance", "Tags": [
-            {"Key": "Name", "Value": f"{name}-EC2-Instance"}, {"Key": "Project", "Value": name}]}])
-    return response["Instances"][0]["InstanceId"]
+    template_name = f"{name}-Launch-Template"
+    template_data = {
+        "ImageId": image_id,
+        "InstanceType": "t2.micro",
+        "KeyName": key_name,
+        "SecurityGroupIds": [security_group_id],
+        "UserData": base64.b64encode(user_data().encode("utf-8")).decode("ascii"),
+        "TagSpecifications": [
+            {"ResourceType": "instance", "Tags": [
+                {"Key": "Name", "Value": f"{name}-EC2-Instance"},
+                {"Key": "Project", "Value": name}]},
+            {"ResourceType": "volume", "Tags": [{"Key": "Project", "Value": name}]},
+        ],
+    }
+    existing = ec2.describe_launch_templates(LaunchTemplateNames=[template_name])["LaunchTemplates"]
+    if existing:
+        template_id = existing[0]["LaunchTemplateId"]
+        ec2.create_launch_template_version(
+            LaunchTemplateId=template_id, SourceVersion="$Latest",
+            LaunchTemplateData=template_data,
+            VersionDescription="Updated web server configuration")
+        return template_id
+    response = ec2.create_launch_template(
+        LaunchTemplateName=template_name,
+        VersionDescription="Initial web server configuration",
+        LaunchTemplateData=template_data,
+        TagSpecifications=[{"ResourceType": "launch-template", "Tags": [
+            {"Key": "Name", "Value": template_name}, {"Key": "Project", "Value": name}]}])
+    return response["LaunchTemplate"]["LaunchTemplateId"]
