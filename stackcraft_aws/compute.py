@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 TEMPLATE_URL = "https://www.tooplate.com/download/2017_hosting"
 
 
-def create_key_pair(ec2, name, key_path):
+def create_key_pair(ec2, name, key_path, resources=None):
     """Create or reuse the named EC2 key pair and save its private PEM file."""
     key_name = f"{name}-KeyPair"
     existing = ec2.describe_key_pairs(Filters=[{"Name": "key-name", "Values": [key_name]}])["KeyPairs"]
@@ -15,12 +15,14 @@ def create_key_pair(ec2, name, key_path):
         if not Path(key_path).is_file():
             raise RuntimeError(f"Key pair {key_name!r} already exists, but its private key file {key_path!r} is missing. Delete the existing key pair in AWS before rerunning.")
         return key_name
-    response = ec2.create_key_pair(KeyName=key_name, KeyType="rsa", KeyFormat="pem")
     path = Path(key_path)
+    response = ec2.create_key_pair(KeyName=key_name, KeyType="rsa", KeyFormat="pem")
+    if resources is not None:
+        resources["key_pair"] = {"Name": key_name, "Path": str(path)}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(response["KeyMaterial"], encoding="utf-8")
     try:
-        path.chmod(0o600)
+        path.chmod(0o400)
     except OSError:
         pass
     return key_name
@@ -50,7 +52,7 @@ def latest_amazon_linux_2023(region_name):
     return ssm.get_parameter(Name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64")["Parameter"]["Value"]
 
 
-def create_launch_template(ec2, name, security_group_id, key_name, region_name):
+def create_launch_template(ec2, name, security_group_id, key_name, region_name, resources=None):
     """Create a launch template or add a new version for the Auto Scaling Group."""
     image_id = latest_amazon_linux_2023(region_name)
     template_name = f"{name}-Launch-Template"
@@ -77,10 +79,15 @@ def create_launch_template(ec2, name, security_group_id, key_name, region_name):
         existing = []
     if existing:
         template_id = existing[0]["LaunchTemplateId"]
-        ec2.create_launch_template_version(
+        version = ec2.create_launch_template_version(
             LaunchTemplateId=template_id, SourceVersion="$Latest",
             LaunchTemplateData=template_data,
             VersionDescription="Updated web server configuration")
+        if resources is not None:
+            resources["launch_template_versions"].append({
+                "LaunchTemplateId": template_id,
+                "VersionNumber": version["LaunchTemplateVersion"]["VersionNumber"],
+            })
         return template_id
     response = ec2.create_launch_template(
         LaunchTemplateName=template_name,
@@ -88,5 +95,7 @@ def create_launch_template(ec2, name, security_group_id, key_name, region_name):
         LaunchTemplateData=template_data,
         TagSpecifications=[{"ResourceType": "launch-template", "Tags": [
             {"Key": "Name", "Value": template_name}, {"Key": "Project", "Value": name}]}])
-    return response["LaunchTemplate"]["LaunchTemplateId"]
-
+    template_id = response["LaunchTemplate"]["LaunchTemplateId"]
+    if resources is not None:
+        resources["launch_templates"].append(template_id)
+    return template_id

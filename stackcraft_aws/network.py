@@ -26,7 +26,7 @@ def get_public_subnets(ec2, vpc_id):
     return selected
 
 
-def create_security_groups(ec2, vpc_id, name, my_ip_cidr):
+def create_security_groups(ec2, vpc_id, name, my_ip_cidr, resources=None):
     "Create or reuse the EC2 and ALB security groups and add the required ingress rules."
     def get_or_create(group_name, description):
         """Find a matching security group in this VPC or create it."""
@@ -36,7 +36,12 @@ def create_security_groups(ec2, vpc_id, name, my_ip_cidr):
         ])["SecurityGroups"]
         if groups:
             return groups[0]["GroupId"]
-        return ec2.create_security_group(GroupName=group_name, Description=description, VpcId=vpc_id)["GroupId"]
+        group_id = ec2.create_security_group(
+            GroupName=group_name, Description=description, VpcId=vpc_id
+        )["GroupId"]
+        if resources is not None:
+            resources["security_groups"].append(group_id)
+        return group_id
 
     instance_sg = get_or_create(f"{name}-EC2-SG", f"{name} EC2 ingress")
     alb_sg = get_or_create(f"{name}-ALB-SG", f"{name} ALB HTTP ingress")
@@ -89,4 +94,9 @@ def create_security_groups(ec2, vpc_id, name, my_ip_cidr):
         )
         if not already_present:
             ec2.authorize_security_group_ingress(GroupId=group_id, IpPermissions=[permission])
+            if resources is not None:
+                resources["added_ingress"].append({
+                    "GroupId": group_id,
+                    "Permission": permission,
+                })
     return instance_sg, alb_sg

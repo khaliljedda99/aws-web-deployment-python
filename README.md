@@ -60,7 +60,9 @@ For Virginia, set AWS_REGION=us-east-1. Leave MY_IP_CIDR blank to have the progr
     set +a
     python -m stackcraft_aws.main
 
-The command prints the Auto Scaling Group name and ALB endpoint. The ASG launches two instances; allow a few minutes for user data to download the site files and configure Apache, then allow the ALB health checks to mark both targets healthy.
+The command prints the Auto Scaling Group name, then waits up to 10 minutes for both targets to become healthy. It prints the ALB endpoint only after both health checks pass. While waiting, it reports each target's state; if the wait times out, it exits with the target IDs and health-check details to help diagnose the deployment.
+
+If deployment fails, the program attempts to roll back resources created during that run in dependency order. It preserves resources it reused, restores the previous settings of an existing Auto Scaling Group, and reports any cleanup failures alongside the deployment error.
 
 If you previously ran the single-instance version, the ASG does not adopt or terminate that instance. The old instance may also remain registered in the reused target group. After both ASG instances are healthy, deregister the old instance from the target group and terminate it in EC2 to avoid an extra target and ongoing instance charges.
 
@@ -81,7 +83,13 @@ The project's original single-file Boto3 implementation is preserved in [initial
 
 SSH (22) is restricted to MY_IP_CIDR. When the variable is blank, the program discovers the current public IPv4 address using checkip.amazonaws.com and adds /32. The ALB security group allows HTTP (80) from anywhere, while the EC2 security group allows HTTP only from the ALB security group. This example serves plain HTTP. AWS charges for resources such as EC2 and the ALB while they are running.
 
-The private key is written to Hosting-KeyPair.pem. Keep it private. The .env file, PEM keys, Python virtual environment, and bytecode cache are excluded by .gitignore.
+The private key is written to Hosting-KeyPair.pem with restrictive read-only permissions. Keep it private. The .env file, PEM keys, Python virtual environment, and bytecode cache are excluded by .gitignore.
+
+### Recovering a lost key pair file
+
+AWS does not let you download the original private key again. If Hosting-KeyPair.pem is missing, first restore it from a secure backup. The script will stop rather than silently create a different key while the Hosting-KeyPair still exists in AWS.
+
+If the key is permanently lost, delete the Hosting-KeyPair key-pair resource in EC2 and run the script again to create a replacement with the same name. The replacement key works for new instances only: existing instances still trust the old public key. To access or replace those instances, use another configured access method such as EC2 Instance Connect, or replace them through the Auto Scaling Group after confirming it can launch two instances.
 
 ## Cleanup
 
