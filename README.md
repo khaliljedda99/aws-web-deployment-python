@@ -72,8 +72,9 @@ If you previously ran the single-instance version, the ASG does not adopt or ter
 - network.py — default VPC, public subnet selection, and security groups
 - compute.py — key pair, launch template, AMI lookup, and website user data
 - autoscaling.py — maintains two EC2 instances and attaches them to the ALB target group
-- load_balancer.py — ALB, target group, and listener
-- main.py — deployment entry point and resource orchestration
+- load_balancer.py — ALB, target group, listener, and wait for healthy targets
+- cleanup.py — tracks newly created resources and rolls them back after deployment failure
+- main.py — deployment entry point; coordinates resource creation, readiness, and rollback
 
 ## Original first attempt
 
@@ -94,3 +95,4 @@ If the key is permanently lost, delete the Hosting-KeyPair key-pair resource in 
 ## Cleanup
 
 Delete resources in dependency order: delete the Auto Scaling Group with desired capacity set to zero (or delete it with instance termination enabled), then delete the HTTP listener, ALB, and target group. Delete any remaining project EC2 instances, then the launch template, Hosting-EC2-SG, Hosting-ALB-SG, and Hosting-KeyPair. Confirm each resource belongs to this project before removing it.
+
