@@ -1,7 +1,9 @@
+Warning: fs was declared with const; use let for reassignable variables.
 """Create the EC2 key pair and launch template for the web servers."""
 
 import base64
 from pathlib import Path
+from botocore.exceptions import ClientError
 
 TEMPLATE_URL = "https://www.tooplate.com/download/2017_hosting"
 
@@ -29,7 +31,8 @@ def user_data(template_url=TEMPLATE_URL):
     """Return the EC2 startup script that installs Apache and the Tooplate site."""
     return f'''#!/bin/bash
 set -euxo pipefail
-dnf install -y httpd curl unzip
+# Amazon Linux 2023 ships curl-minimal; installing full curl conflicts with it.
+dnf install -y httpd curl-minimal unzip
 systemctl enable --now httpd
 workdir=$(mktemp -d)
 curl -fL --retry 5 --retry-delay 3 "{template_url}" -o "$workdir/template.zip"
@@ -65,7 +68,14 @@ def create_launch_template(ec2, name, security_group_id, key_name, region_name):
             {"ResourceType": "volume", "Tags": [{"Key": "Project", "Value": name}]},
         ],
     }
-    existing = ec2.describe_launch_templates(LaunchTemplateNames=[template_name])["LaunchTemplates"]
+    try:
+        existing = ec2.describe_launch_templates(
+            LaunchTemplateNames=[template_name]
+        )["LaunchTemplates"]
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "InvalidLaunchTemplateName.NotFoundException":
+            raise
+        existing = []
     if existing:
         template_id = existing[0]["LaunchTemplateId"]
         ec2.create_launch_template_version(
