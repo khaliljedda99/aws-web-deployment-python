@@ -1,4 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
 """Create the EC2 key pair and launch template for the web servers."""
 
 import base64
@@ -90,3 +89,4 @@ def create_launch_template(ec2, name, security_group_id, key_name, region_name):
         TagSpecifications=[{"ResourceType": "launch-template", "Tags": [
             {"Key": "Name", "Value": template_name}, {"Key": "Project", "Value": name}]}])
     return response["LaunchTemplate"]["LaunchTemplateId"]
+
