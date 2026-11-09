@@ -60,7 +60,7 @@ For Virginia, set AWS_REGION=us-east-1. Leave MY_IP_CIDR blank to have the progr
     set +a
     python -m stackcraft_aws.main
 
-The command prints the Auto Scaling Group name, then waits up to 10 minutes for both targets to become healthy. It prints the ALB endpoint only after both health checks pass. While waiting, it reports each target's state; if the wait times out, it exits with the target IDs and health-check details to help diagnose the deployment.
+The command prints the Auto Scaling Group name, then waits up to 10 minutes for both `InService` instances in that group to become healthy targets. Healthy targets outside the group, such as an older standalone instance, do not count. It prints the ALB endpoint only after both ASG instances pass the health checks. While waiting, it reports each target's state; if the wait times out, it exits with the target IDs and health-check details to help diagnose the deployment.
 
 If deployment fails, the program attempts to roll back resources created during that run in dependency order. It preserves resources it reused, restores the previous settings of an existing Auto Scaling Group, and reports any cleanup failures alongside the deployment error.
 

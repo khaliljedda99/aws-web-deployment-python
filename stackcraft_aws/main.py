@@ -41,7 +41,8 @@ def main():
 
         print(f"Auto Scaling Group: {group_name} (minimum and desired capacity: {DESIRED_CAPACITY})")
         wait_for_healthy_targets(
-            elbv2, target_group_arn, expected_count=DESIRED_CAPACITY)
+            elbv2, autoscaling, group_name, target_group_arn,
+            expected_count=DESIRED_CAPACITY)
     except Exception as exc:
         cleanup_errors = rollback_deployment(ec2, elbv2, autoscaling, resources)
         error_type = "AWS API error" if isinstance(exc, ClientError) else "Deployment failed"

@@ -41,19 +41,33 @@ def create_alb(elbv2, name, vpc_id, subnets, alb_security_group_id, resources=No
     return dns_name, target_group_arn
 
 
-def wait_for_healthy_targets(elbv2, target_group_arn, expected_count=2,
-                             timeout_seconds=600, poll_interval=15):
-    """Wait until the target group has enough healthy targets or explain the failures."""
+def wait_for_healthy_targets(elbv2, autoscaling, group_name, target_group_arn,
+                             expected_count=2, timeout_seconds=600,
+                             poll_interval=15):
+    """Wait until enough InService instances in the ASG are healthy ALB targets."""
     deadline = time.monotonic() + timeout_seconds
     last_report = None
 
     while True:
+        groups = autoscaling.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[group_name]
+        )["AutoScalingGroups"]
+        asg_instances = {
+            instance["InstanceId"]
+            for group in groups
+            for instance in group["Instances"]
+            if instance["LifecycleState"] == "InService"
+        }
         targets = elbv2.describe_target_health(
             TargetGroupArn=target_group_arn
         )["TargetHealthDescriptions"]
-        healthy_count = sum(
-            target["TargetHealth"]["State"] == "healthy" for target in targets
-        )
+        healthy_targets = {
+            target["Target"]["Id"]
+            for target in targets
+            if target["TargetHealth"]["State"] == "healthy"
+        }
+        healthy_asg_targets = asg_instances & healthy_targets
+        healthy_count = len(healthy_asg_targets)
         if healthy_count >= expected_count:
             return
 
@@ -64,14 +78,19 @@ def wait_for_healthy_targets(elbv2, target_group_arn, expected_count=2,
                if target["TargetHealth"].get("Reason") else "")
             for target in targets
         ) or "no targets registered yet"
-        report = (healthy_count, target_summary)
+        report = (healthy_count, len(asg_instances), target_summary)
         if report != last_report:
-            print(f"Waiting for healthy targets ({healthy_count}/{expected_count}). {target_summary}")
+            print(
+                f"Waiting for healthy ASG targets ({healthy_count}/{expected_count}; "
+                f"{len(asg_instances)} ASG instances InService). {target_summary}"
+            )
             last_report = report
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError(
-                f"Timed out waiting for {expected_count} healthy targets. {target_summary}"
+                f"Timed out waiting for {expected_count} healthy targets from Auto "
+                f"Scaling Group {group_name}; {healthy_count} InService ASG instances "
+                f"are healthy. {target_summary}"
             )
         time.sleep(min(poll_interval, remaining))
