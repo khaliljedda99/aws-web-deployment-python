@@ -88,9 +88,9 @@ The private key is written to Hosting-KeyPair.pem with restrictive read-only per
 
 ## Recovering a lost key pair file
 
-AWS does not let you download the original private key again. If Hosting-KeyPair.pem is missing, first restore it from a secure backup. The script will stop rather than silently create a different key while the Hosting-KeyPair still exists in AWS.
+AWS does not let you download the original private key again. If Hosting-KeyPair.pem is missing while the Hosting-KeyPair still exists in AWS, restore the file from a secure backup; the script cannot recreate that key material.
 
-If the key is permanently lost, delete the Hosting-KeyPair key-pair resource in EC2 and run the script again to create a replacement with the same name. The replacement key works for new instances only: existing instances still trust the old public key. To access or replace those instances, use another configured access method such as EC2 Instance Connect, or replace them through the Auto Scaling Group after confirming it can launch two instances.
+If the AWS key-pair resource no longer exists, the script creates a replacement. If Hosting-KeyPair.pem already exists locally, the replacement key material overwrites it. The replacement key works for new instances only: existing instances still trust the old public key. To access or replace those instances, use another configured access method such as EC2 Instance Connect, or replace them through the Auto Scaling Group after confirming it can launch two instances.
 
 ## Cleanup
 

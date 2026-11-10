@@ -33,11 +33,59 @@ def create_alb(elbv2, name, vpc_id, subnets, alb_security_group_id, resources=No
 
     # The ASG registers its instances with this target group after launch.
     listeners = elbv2.describe_listeners(LoadBalancerArn=alb_arn)["Listeners"]
-    if not any(x["Port"] == 80 and x["Protocol"] == "HTTP" for x in listeners):
-        listener = elbv2.create_listener(LoadBalancerArn=alb_arn, Protocol="HTTP", Port=80,
-            DefaultActions=[{"Type": "forward", "TargetGroupArn": target_group_arn}])
+    http_listener = next(
+        (
+            listener
+            for listener in listeners
+            if listener["Port"] == 80 and listener["Protocol"] == "HTTP"
+        ),
+        None,
+    )
+    desired_action = {"Type": "forward", "TargetGroupArn": target_group_arn}
+
+    if http_listener is None:
+        # No HTTP listener exists: create it.
+        response = elbv2.create_listener(
+            LoadBalancerArn=alb_arn,
+            Protocol="HTTP",
+            Port=80,
+            DefaultActions=[desired_action],
+        )
         if resources is not None:
-            resources["listeners"].append(listener["Listeners"][0]["ListenerArn"])
+            resources["listeners"].append(
+                response["Listeners"][0]["ListenerArn"]
+            )
+    else:
+        # Check both simple and weighted forward actions before modifying it.
+        forwards_to_target_group = False
+        current_actions = http_listener.get("DefaultActions", [])
+        for action in current_actions:
+            if action.get("Type") != "forward":
+                continue
+            if action.get("TargetGroupArn") == target_group_arn:
+                forwards_to_target_group = True
+                break
+            forward_config = action.get("ForwardConfig", {})
+            target_groups = forward_config.get("TargetGroups", [])
+            if any(
+                group.get("TargetGroupArn") == target_group_arn
+                for group in target_groups
+            ):
+                forwards_to_target_group = True
+                break
+
+        if not forwards_to_target_group:
+            if resources is not None:
+                resources["updated_listeners"].append(
+                    {
+                        "ListenerArn": http_listener["ListenerArn"],
+                        "DefaultActions": current_actions,
+                    }
+                )
+            elbv2.modify_listener(
+                ListenerArn=http_listener["ListenerArn"],
+                DefaultActions=[desired_action],
+            )
     return dns_name, target_group_arn
 
 

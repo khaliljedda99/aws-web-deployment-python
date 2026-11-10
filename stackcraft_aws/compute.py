@@ -16,11 +16,24 @@ def create_key_pair(ec2, name, key_path, resources=None):
             raise RuntimeError(f"Key pair {key_name!r} already exists, but its private key file {key_path!r} is missing. Delete the existing key pair in AWS before rerunning.")
         return key_name
     path = Path(key_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    replacing_existing_file = path.exists()
+    if replacing_existing_file:
+        # On Windows chmod also clears the read-only file attribute.
+        path.chmod(0o600)
+
     response = ec2.create_key_pair(KeyName=key_name, KeyType="rsa", KeyFormat="pem")
     if resources is not None:
-        resources["key_pair"] = {"Name": key_name, "Path": str(path)}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(response["KeyMaterial"], encoding="utf-8")
+        resources["key_pair"] = {
+            "Name": key_name,
+            "Path": str(path),
+            "FileCreated": not replacing_existing_file,
+        }
+    open_mode = "w" if replacing_existing_file else "x"
+    with path.open(open_mode, encoding="utf-8") as key_file:
+        if resources is not None and not replacing_existing_file:
+            resources["key_pair"]["FileCreated"] = True
+        key_file.write(response["KeyMaterial"])
     try:
         path.chmod(0o400)
     except OSError:

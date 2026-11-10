@@ -17,6 +17,7 @@ def new_resource_registry():
         "target_groups": [],
         "load_balancers": [],
         "listeners": [],
+        "updated_listeners": [],
         "created_auto_scaling_groups": [],
         "updated_auto_scaling_groups": [],
     }
@@ -97,6 +98,16 @@ def rollback_deployment(ec2, elbv2, autoscaling, resources):
             ),
         )
 
+    # Restore reused listeners before deleting any target groups from this run.
+    for snapshot in reversed(resources["updated_listeners"]):
+        attempt(
+            f"restore listener {snapshot['ListenerArn']}",
+            lambda snapshot=snapshot: elbv2.modify_listener(
+                ListenerArn=snapshot["ListenerArn"],
+                DefaultActions=snapshot["DefaultActions"],
+            ),
+        )
+
     for listener_arn in reversed(resources["listeners"]):
         attempt(
             f"delete listener {listener_arn}",
@@ -140,7 +151,8 @@ def rollback_deployment(ec2, elbv2, autoscaling, resources):
             ),
         )
 
-    for group_id in reversed(resources["security_groups"]):
+    # Delete the EC2 group before the ALB group it references in its ingress rule.
+    for group_id in resources["security_groups"]:
         def delete_security_group(group_id=group_id):
             for attempt_number in range(12):
                 try:
@@ -161,8 +173,14 @@ def rollback_deployment(ec2, elbv2, autoscaling, resources):
         except Exception as exc:
             errors.append(f"delete key pair {key_pair['Name']}: {exc}")
         else:
-            key_path = Path(key_pair["Path"])
-            if key_path.is_file():
-                attempt(f"remove private key file {key_path}", key_path.unlink)
+            if key_pair.get("FileCreated", False):
+                key_path = Path(key_pair["Path"])
+                if key_path.is_file():
+                    def remove_key_file(key_path=key_path):
+                        # Windows maps a read-only key mode to a read-only file flag.
+                        key_path.chmod(0o600)
+                        key_path.unlink()
+
+                    attempt(f"remove private key file {key_path}", remove_key_file)
 
     return errors
